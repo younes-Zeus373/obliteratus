@@ -2541,6 +2541,8 @@ class AbliterationPipeline:
                 if router is None:
                     continue
 
+            if router.weight.device.type == "meta":
+                continue
             W = router.weight.data  # (num_experts, hidden_dim)
             d_flat = d.to(device=W.device, dtype=W.dtype)
             if d_flat.dim() > 1:
@@ -2718,6 +2720,8 @@ class AbliterationPipeline:
             proj = getattr(module, name, None)
             if proj is None or not hasattr(proj, "weight"):
                 continue
+            if proj.weight.device.type == "meta":
+                continue
 
             W, is_quantized = AbliterationPipeline._dequantize_weight(proj)
             d = direction.to(device=W.device, dtype=W.dtype)
@@ -2789,6 +2793,8 @@ class AbliterationPipeline:
         for name in _ATTN_OUT_NAMES:
             proj = getattr(attn_module, name, None)
             if proj is None or not hasattr(proj, "weight"):
+                continue
+            if proj.weight.device.type == "meta":
                 continue
 
             W, is_quantized = AbliterationPipeline._dequantize_weight(proj)
@@ -4022,6 +4028,8 @@ class AbliterationPipeline:
                     for name in weight_names:
                         proj = getattr(module, name, None)
                         if proj is not None and hasattr(proj, "weight"):
+                            if proj.weight.device.type == "meta":
+                                continue
                             W = proj.weight.data
                             d_dev = d_col.to(device=W.device, dtype=W.dtype)
                             if W.shape[-1] == d_dev.shape[0]:
@@ -4457,6 +4465,8 @@ class AbliterationPipeline:
                     )
                     continue
             else:
+                if param.device.type == "meta":
+                    continue
                 data = param.data
                 # Non-float (e.g. uint8) fused params need float conversion
                 if not data.is_floating_point():
@@ -4556,6 +4566,8 @@ class AbliterationPipeline:
         for rname in _ROUTER_NAMES:
             gate = getattr(ffn_module, rname, None)
             if gate is not None and hasattr(gate, "weight"):
+                if gate.weight.device.type == "meta":
+                    return
                 W = gate.weight.data
                 std = W.std()
                 if std > 0:
@@ -4568,6 +4580,8 @@ class AbliterationPipeline:
                 if child_name == "experts":
                     continue
                 if not hasattr(child, "weight"):
+                    continue
+                if child.weight.device.type == "meta":
                     continue
                 W = child.weight
                 if W.shape[0] < 512 and W.shape[0] != W.shape[-1]:
@@ -5027,6 +5041,8 @@ class AbliterationPipeline:
             param = getattr(container, pname, None)
             if param is None or not hasattr(param, "data"):
                 continue
+            if param.data.device.type == "meta":
+                continue
             data = param.data
             if data.dim() != 3:
                 continue
@@ -5139,6 +5155,8 @@ class AbliterationPipeline:
         for pname in param_names:
             param = getattr(container, pname, None)
             if param is None or not hasattr(param, "data"):
+                continue
+            if param.data.device.type == "meta":
                 continue
             data = param.data
             if data.dim() != 3:
