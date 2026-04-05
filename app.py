@@ -2444,7 +2444,11 @@ def chat_respond(message: str, history: list[dict], system_prompt: str,
         text = "\n".join(f"{m['role']}: {m['content']}" for m in messages) + "\nassistant:"
 
     inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=context_length)
-    inputs = {k: v.to(model.device) for k, v in inputs.items()}
+    _chat_device = next(
+        (p.device for p in model.parameters() if p.device.type != "meta"),
+        torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+    )
+    inputs = {k: v.to(_chat_device) for k, v in inputs.items()}
 
     # Streaming generation — repetition_penalty (user-controllable, default 1.0)
     # can break degenerate refusal loops if increased.
@@ -2913,7 +2917,11 @@ def ab_chat_respond(message: str, history_left: list[dict], history_right: list[
     # --- Generate from abliterated model (streaming) ---
     stream_timeout = max(120, 120 + int(max_tokens * 0.1))
     streamer_abl = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True, timeout=stream_timeout)
-    inputs_abl = {k: v.to(abliterated_model.device) for k, v in inputs.items()}
+    _abl_device = next(
+        (p.device for p in abliterated_model.parameters() if p.device.type != "meta"),
+        torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+    )
+    inputs_abl = {k: v.to(_abl_device) for k, v in inputs.items()}
     gen_kwargs_abl = {**inputs_abl, **gen_kwargs_base, "streamer": streamer_abl}
 
     gen_error_abl = [None]
@@ -2956,7 +2964,10 @@ def ab_chat_respond(message: str, history_left: list[dict], history_right: list[
 
     # Offload abliterated model to CPU to free GPU for original model.
     # This avoids holding both models in VRAM simultaneously (2x OOM risk).
-    abl_device = next(abliterated_model.parameters()).device
+    abl_device = next(
+        (p.device for p in abliterated_model.parameters() if p.device.type != "meta"),
+        torch.device("cpu"),
+    )
     abliterated_model.to("cpu")
     gc.collect()
     dev.empty_cache()
@@ -2974,7 +2985,11 @@ def ab_chat_respond(message: str, history_left: list[dict], history_right: list[
         )
 
         streamer_orig = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True, timeout=stream_timeout)
-        inputs_orig = {k: v.to(original_model.device) for k, v in inputs.items()}
+        _orig_device = next(
+            (p.device for p in original_model.parameters() if p.device.type != "meta"),
+            torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+        )
+        inputs_orig = {k: v.to(_orig_device) for k, v in inputs.items()}
         gen_kwargs_orig = {**inputs_orig, **gen_kwargs_base, "streamer": streamer_orig}
 
         gen_error_orig = [None]
