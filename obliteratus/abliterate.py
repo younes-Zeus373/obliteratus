@@ -2443,6 +2443,9 @@ class AbliterationPipeline:
             if o_proj is None:
                 continue
 
+            if o_proj.weight.device.type == "meta":
+                continue
+
             W = o_proj.weight.data
             d = self.refusal_directions[idx].to(device=W.device, dtype=W.dtype)
             if d.dim() > 1:
@@ -3491,7 +3494,7 @@ class AbliterationPipeline:
                         and hasattr(lm_head_obj, "weight")
                     )
                     lm_original_norm = 0.0
-                    if lm_multi_dir:
+                    if lm_multi_dir and lm_head_obj.weight.device.type != "meta":
                         lm_original_norm = lm_head_obj.weight.data.norm().item()
                     for dir_idx in range(subspace_on_device.shape[0]):
                         d = subspace_on_device[dir_idx].unsqueeze(-1)
@@ -4299,6 +4302,11 @@ class AbliterationPipeline:
         for name in candidate_names:
             proj = getattr(module, name, None)
             if proj is None or not hasattr(proj, "weight"):
+                continue
+
+            # Skip disk-offloaded layers (device_map="auto" with CPU offload):
+            # their weights live on the meta device and cannot be modified in-place.
+            if getattr(proj.weight, "device", None) is not None and proj.weight.device.type == "meta":
                 continue
 
             W, is_quantized = AbliterationPipeline._dequantize_weight(proj)
