@@ -4235,7 +4235,7 @@ class AbliterationPipeline:
         """
         norms: dict[str, float] = {}
         for param_name, param in layer.named_parameters():
-            if param_name.endswith(".weight"):
+            if param_name.endswith(".weight") and param.data.device.type != "meta":
                 data = param.data.float() if not param.data.is_floating_point() else param.data
                 norms[param_name] = data.norm().item()
         return norms
@@ -4253,6 +4253,8 @@ class AbliterationPipeline:
         """
         for param_name, param in layer.named_parameters():
             if param_name not in saved_norms:
+                continue
+            if param.data.device.type == "meta":
                 continue
             original_norm = saved_norms[param_name]
             if original_norm > 0:
