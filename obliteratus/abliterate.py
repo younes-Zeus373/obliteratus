@@ -867,6 +867,8 @@ class AbliterationPipeline:
                     continue
                 if not hasattr(child, "weight"):
                     continue
+                if child.weight.device.type == "meta":
+                    continue
                 W = child.weight
                 if W.shape[0] < 512 and W.shape[0] != W.shape[-1]:
                     return child
@@ -2533,6 +2535,8 @@ class AbliterationPipeline:
                         if child_name == "experts":
                             continue
                         if not hasattr(child, "weight"):
+                            continue
+                        if child.weight.device.type == "meta":
                             continue
                         W = child.weight
                         if W.shape[-1] == hidden_dim and W.shape[0] < 512 and W.shape[0] != hidden_dim:
@@ -4656,6 +4660,8 @@ class AbliterationPipeline:
                     continue  # skip the experts module itself
                 if not hasattr(child, "weight"):
                     continue
+                if child.weight.device.type == "meta":
+                    continue
                 W = child.weight
                 # Router pattern: Linear(hidden_dim, num_experts) where
                 # num_experts is typically small (< 512).
@@ -4836,6 +4842,8 @@ class AbliterationPipeline:
                 if child_name == "experts":
                     continue
                 if not hasattr(child, "weight"):
+                    continue
+                if child.weight.device.type == "meta":
                     continue
                 W = child.weight
                 if W.shape[-1] == hidden_dim and W.shape[0] < 512 and W.shape[0] != hidden_dim:
