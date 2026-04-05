@@ -53,7 +53,11 @@ class Evaluator:
 
         model = self.handle.model
         tokenizer = self.handle.tokenizer
-        device = next(model.parameters()).device
+        # Find first non-meta parameter to determine the input device
+        device = next(
+            (p.device for p in model.parameters() if p.device.type != "meta"),
+            torch.device("cpu"),
+        )
 
         ds = self.dataset
         if self.max_samples is not None:
@@ -76,9 +80,12 @@ class Evaluator:
             attention_mask = encodings["attention_mask"]
 
             outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
+            loss_val = outputs.loss.item()
+            if not (loss_val == loss_val):  # NaN check
+                continue
             # Mask out padding tokens for loss computation
             num_tokens = attention_mask[:, 1:].sum().item()
-            total_loss += outputs.loss.item() * num_tokens
+            total_loss += loss_val * num_tokens
             total_tokens += num_tokens
 
         import math
@@ -92,7 +99,10 @@ class Evaluator:
 
         model = self.handle.model
         tokenizer = self.handle.tokenizer
-        device = next(model.parameters()).device
+        device = next(
+            (p.device for p in model.parameters() if p.device.type != "meta"),
+            torch.device("cpu"),
+        )
 
         ds = self.dataset
         if self.max_samples is not None:
