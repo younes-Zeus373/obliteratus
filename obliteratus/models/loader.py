@@ -330,13 +330,14 @@ class ModelHandle:
         """
         if self._original_state is None:
             raise RuntimeError("No snapshot to restore — call .snapshot() first.")
-        # Map each key to the device where the model currently holds it
+        # Map each key to the device where the model currently holds it.
+        # Use strict=False so meta-device keys absent from the snapshot are left as-is.
         current_state = self.model.state_dict()
         restored = {}
         for k, v in self._original_state.items():
             target = current_state[k].device if k in current_state else None
             restored[k] = v.to(target) if target is not None else v
-        self.model.load_state_dict(restored)
+        self.model.load_state_dict(restored, strict=False)
 
     def cleanup(self):
         """Remove temporary offload directory if one was auto-created."""
