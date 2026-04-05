@@ -5984,13 +5984,42 @@ class AbliterationPipeline:
                 arr = np.fromfile(str(dat_file), dtype=torch.tensor([], dtype=dtype).numpy().dtype)
                 state_dict[key] = torch.from_numpy(arr).reshape(shape)
 
-        still_meta = sum(1 for v in state_dict.values() if v.device.type == "meta")
+        still_meta = [k for k, v in state_dict.items() if v.device.type == "meta"]
         if still_meta:
-            raise RuntimeError(
-                f"Materialization incomplete: {still_meta} tensors still on meta device "
-                f"after loading from offload dir {offload_dir!r}. "
-                f"Aborting to prevent writing a bricked checkpoint."
+            # Offload dir exists but tensors weren't written there — fall back to
+            # loading them directly from the original HF checkpoint on disk/cache.
+            self.log(
+                f"{len(still_meta)} tensors not found in offload dir, "
+                f"loading from original checkpoint..."
             )
+            try:
+                from transformers import AutoModelForCausalLM as _AMCLM
+                _ref = _AMCLM.from_pretrained(
+                    self.model_name,
+                    torch_dtype=self.handle.model.dtype,
+                    device_map="cpu",
+                    token=self.hub_token,
+                )
+                ref_sd = _ref.state_dict()
+                for k in still_meta:
+                    if k in ref_sd:
+                        state_dict[k] = ref_sd[k].cpu()
+                del _ref, ref_sd
+            except Exception as e:
+                raise RuntimeError(
+                    f"Materialization incomplete: {len(still_meta)} tensors still on meta device "
+                    f"after loading from offload dir {offload_dir!r}, and fallback load from "
+                    f"original checkpoint also failed: {e}. "
+                    f"Aborting to prevent writing a bricked checkpoint."
+                ) from e
+
+            still_meta_after = [k for k, v in state_dict.items() if v.device.type == "meta"]
+            if still_meta_after:
+                raise RuntimeError(
+                    f"Materialization incomplete: {len(still_meta_after)} tensors still on meta "
+                    f"device after all fallback attempts. "
+                    f"Aborting to prevent writing a bricked checkpoint."
+                )
 
         return state_dict
 
