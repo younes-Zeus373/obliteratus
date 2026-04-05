@@ -70,6 +70,7 @@ def run_study(config: StudyConfig) -> AblationReport:
     report.add_baseline(baseline)
 
     # --- 4. Run ablation strategies ---
+    handle.snapshot()
     for strat_cfg in config.strategies:
         console.print(f"\n[bold magenta]Strategy:[/bold magenta] {strat_cfg.name}")
         strategy = get_strategy(strat_cfg.name)

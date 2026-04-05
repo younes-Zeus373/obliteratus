@@ -317,7 +317,11 @@ class ModelHandle:
         Tensors are moved to CPU to avoid doubling GPU memory usage on
         multi-GPU (device_map) setups.
         """
-        self._original_state = {k: v.cpu().clone() for k, v in self.model.state_dict().items()}
+        self._original_state = {
+            k: v.cpu().clone()
+            for k, v in self.model.state_dict().items()
+            if v.device.type != "meta"
+        }
 
     def restore(self):
         """Restore the model to the snapshot state.
