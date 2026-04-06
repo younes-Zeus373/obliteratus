@@ -247,7 +247,7 @@ def _recover_sessions_from_disk() -> None:
     # most recent checkpoint so chat_respond can reload from disk.
     if found_any and not _state.get("output_dir"):
         with _lock:
-            latest = _last_obliterated_label
+            latest = _last_obliterated_label  # read inside lock to avoid TOCTOU
             if latest and latest in _session_models:
                 _state["output_dir"] = _session_models[latest]["output_dir"]
                 _state["model_name"] = _session_models[latest].get("model_choice")
@@ -2972,6 +2972,14 @@ def ab_chat_respond(message: str, history_left: list[dict], history_right: list[
         pass  # Streamer timeout — use whatever partial_abl we have
 
     thread_abl.join(timeout=stream_timeout + 30)
+    # Ensure generation thread is fully done before moving model to CPU —
+    # moving a model while generate() is running causes a device mismatch crash.
+    if thread_abl.is_alive():
+        try:
+            streamer_abl.end()
+        except Exception:
+            pass
+        thread_abl.join(timeout=10)
     partial_abl = _strip_reasoning_tokens(partial_abl)
     if gen_error_abl[0]:
         partial_abl += f"\n\n**[Error]** {gen_error_abl[0]}"
@@ -2984,10 +2992,6 @@ def ab_chat_respond(message: str, history_left: list[dict], history_right: list[
 
     # Offload abliterated model to CPU to free GPU for original model.
     # This avoids holding both models in VRAM simultaneously (2x OOM risk).
-    abl_device = next(
-        (p.device for p in abliterated_model.parameters() if p.device.type != "meta"),
-        torch.device("cpu"),
-    )
     abliterated_model.to("cpu")
     gc.collect()
     dev.empty_cache()
@@ -3542,6 +3546,7 @@ def export_artifacts():
     log_lines = _state.get("log", [])
 
     exported_files = []
+    os.makedirs(export_dir, exist_ok=True)
 
     # 1. Pipeline log
     log_path = os.path.join(export_dir, "pipeline_log.txt")

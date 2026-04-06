@@ -2469,6 +2469,9 @@ class AbliterationPipeline:
             if head_dim_attn * n_heads != attn_dim:
                 continue  # non-standard head config
 
+            if W.device.type == "meta":
+                continue
+
             # Compute per-head refusal projection
             # Heads are grouped in the attention (input) dimension of o_proj
             head_scores = []
@@ -3504,7 +3507,7 @@ class AbliterationPipeline:
                         and hasattr(lm_head_obj, "weight")
                     )
                     lm_original_norm = 0.0
-                    if lm_multi_dir and lm_head_obj.weight.device.type != "meta":
+                    if lm_multi_dir and lm_head_obj is not None and lm_head_obj.weight.device.type != "meta":
                         lm_original_norm = lm_head_obj.weight.data.norm().item()
                     for dir_idx in range(subspace_on_device.shape[0]):
                         d = subspace_on_device[dir_idx].unsqueeze(-1)
@@ -3515,7 +3518,7 @@ class AbliterationPipeline:
                         )
                         del d
                     # Restore lm_head norm once after all directions
-                    if lm_multi_dir and lm_original_norm > 0 and lm_head_obj is not None:
+                    if lm_multi_dir and lm_original_norm > 0 and lm_head_obj is not None and lm_head_obj.weight.device.type != "meta":
                         new_norm = lm_head_obj.weight.data.norm().item()
                         if new_norm > 0 and not math.isnan(new_norm) and not math.isinf(new_norm):
                             ratio = lm_original_norm / new_norm

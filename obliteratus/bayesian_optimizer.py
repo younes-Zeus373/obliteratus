@@ -432,7 +432,10 @@ def run_bayesian_optimization(
 
             # Use cross-layer interpolated direction
             direction = _interpolate_direction(pipeline, idx, dir_idx)
-            d_col = direction.to(device=next(layer_modules[idx].parameters()).device)
+            d_col = direction.to(device=next(
+                (p.device for p in layer_modules[idx].parameters() if p.device.type != "meta"),
+                direction.device,
+            ))
             d_col = d_col.unsqueeze(-1) if d_col.dim() == 1 else d_col
 
             # Attention projection (with per-component kernel)
