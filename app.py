@@ -2158,11 +2158,31 @@ def obliterate(model_choice: str, method_choice: str,
         })
 
         if can_generate:
-            # Model fits — use it directly (steering hooks already installed)
-            with _lock:
-                _state["model"] = pipeline.handle.model
-                _state["tokenizer"] = pipeline.handle.tokenizer
-                _state["status"] = "ready"
+            # Check if the model has meta-device tensors (device_map offloading).
+            # If so, reload from the saved checkpoint so chat gets a clean model.
+            _has_meta = any(
+                p.device.type == "meta" for p in pipeline.handle.model.parameters()
+            )
+            if _has_meta and save_dir and Path(save_dir).exists():
+                log_lines.append("\nReloading from checkpoint for chat (meta tensors detected)...")
+                last_yielded[0] = len(log_lines)
+                yield status_msg, "\n".join(log_lines), gr.update(), gr.update(), gr.update(), gr.update()
+                pipeline.handle.model = None
+                _clear_gpu()
+                _chat_model = _load_model_to_device(
+                    save_dir, torch_dtype=torch.float16,
+                    trust_remote_code=is_preset,
+                )
+                with _lock:
+                    _state["model"] = _chat_model
+                    _state["tokenizer"] = pipeline.handle.tokenizer
+                    _state["status"] = "ready"
+            else:
+                # Model fits cleanly — use it directly
+                with _lock:
+                    _state["model"] = pipeline.handle.model
+                    _state["tokenizer"] = pipeline.handle.tokenizer
+                    _state["status"] = "ready"
         else:
             # Model too large for generation at full precision.  Free it and
             # reload a smaller copy so the KV cache fits in GPU.
